@@ -1,6 +1,7 @@
 class NotableOrganizer {
     constructor() {
         this.files = [];
+        this.attachments = new Map(); // Map to store attachment files by filename
         this.processedFiles = [];
         this.zip = null;
         this.currentFileIndex = 0;
@@ -136,22 +137,37 @@ class NotableOrganizer {
                 const markdownFiles = [];
                 const filePromises = [];
                 
-                // Find all markdown files in the ZIP
+                // Find all markdown files and attachments in the ZIP
                 zipContent.forEach((relativePath, file) => {
-                    if (!file.dir && (relativePath.endsWith('.md') || relativePath.includes('.md'))) {
-                        filePromises.push(
-                            file.async('text').then(content => {
-                                // Create a File-like object
-                                const fileName = relativePath.split('/').pop(); // Get just the filename
-                                const blob = new Blob([content], { type: 'text/markdown' });
-                                const fileObj = new File([blob], fileName, { type: 'text/markdown' });
-                                markdownFiles.push(fileObj);
-                            })
-                        );
+                    if (!file.dir) {
+                        if (relativePath.endsWith('.md') || relativePath.includes('.md')) {
+                            // Handle markdown files
+                            filePromises.push(
+                                file.async('text').then(content => {
+                                    const fileName = relativePath.split('/').pop();
+                                    const blob = new Blob([content], { type: 'text/markdown' });
+                                    const fileObj = new File([blob], fileName, { type: 'text/markdown' });
+                                    markdownFiles.push(fileObj);
+                                })
+                            );
+                        } else {
+                            // Handle potential attachment files (images, documents, etc.)
+                            const fileName = relativePath.split('/').pop();
+                            const isLikelyAttachment = this.isLikelyAttachment(fileName);
+                            
+                            if (isLikelyAttachment) {
+                                filePromises.push(
+                                    file.async('blob').then(blob => {
+                                        const fileObj = new File([blob], fileName);
+                                        this.attachments.set(fileName, fileObj);
+                                    })
+                                );
+                            }
+                        }
                     }
                 });
                 
-                if (filePromises.length === 0) {
+                if (markdownFiles.length === 0 && filePromises.length === 0) {
                     reject(new Error('No markdown files found in ZIP archive'));
                     return;
                 }
@@ -163,6 +179,19 @@ class NotableOrganizer {
                 reject(new Error(`Failed to extract ZIP file: ${error.message}`));
             }
         });
+    }
+
+    isLikelyAttachment(filename) {
+        const attachmentExtensions = [
+            '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp',
+            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+            '.txt', '.rtf', '.zip', '.rar', '.7z',
+            '.mp3', '.wav', '.mp4', '.avi', '.mov',
+            '.css', '.js', '.json', '.xml', '.csv'
+        ];
+        
+        const ext = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return attachmentExtensions.includes(ext);
     }
 
     readFileAsArrayBuffer(file) {
@@ -190,12 +219,14 @@ class NotableOrganizer {
             
             if (lines[0] !== '---') {
                 // No frontmatter, create default structure
+                const transformedContent = this.transformAttachmentSyntax(content, []);
                 return {
                     filename: filename,
-                    content: content,
+                    content: transformedContent,
                     tags: ['untagged'],
                     title: filename.replace('.md', ''),
-                    frontmatter: {}
+                    frontmatter: {},
+                    attachments: []
                 };
             }
 
@@ -220,13 +251,21 @@ class NotableOrganizer {
             const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags : 
                          frontmatter.tags ? [frontmatter.tags] : ['untagged'];
 
+            // Extract attachments from frontmatter
+            const attachments = Array.isArray(frontmatter.attachments) ? frontmatter.attachments : 
+                               frontmatter.attachments ? [frontmatter.attachments] : [];
+
+            // Transform @attachment syntax in the content
+            const transformedContent = this.transformAttachmentSyntax(content, attachments);
+
             return {
                 filename: filename,
-                content: content,
+                content: transformedContent,
                 tags: tags,
                 title: frontmatter.title || filename.replace('.md', ''),
                 frontmatter: frontmatter,
-                body: bodyLines.join('\n')
+                body: bodyLines.join('\n'),
+                attachments: attachments
             };
 
         } catch (error) {
@@ -236,11 +275,13 @@ class NotableOrganizer {
     }
 
     async addFileToZip(parsedFile) {
-        const { filename, content, tags } = parsedFile;
+        const { filename, content, tags, attachments } = parsedFile;
         
         if (tags.length === 0) {
             // No tags, put in root
             this.zip.file(filename, content);
+            // Add attachments to root as well
+            this.addAttachmentsToZip(attachments, '');
             return;
         }
 
@@ -250,6 +291,9 @@ class NotableOrganizer {
         const primaryFilePath = `${primaryPath}/${filename}`;
         
         this.zip.file(primaryFilePath, content);
+        
+        // Add attachments only to the primary tag folder
+        this.addAttachmentsToZip(attachments, primaryPath);
 
         // For additional tags, create markdown link files
         for (let i = 1; i < tags.length; i++) {
@@ -260,9 +304,27 @@ class NotableOrganizer {
             // Create a markdown file with clickable link
             const markdownLinkPath = `${tagPath}/${baseFilename} - Link.md`;
             const relativePathToOriginal = this.getRelativePath(tagPath, primaryPath);
-            const markdownLinkContent = `# Link to ${filename}\n\n**Original Location:** \`${primaryPath}/${filename}\`\n\n[Open Original File](../${relativePathToOriginal}/${filename})\n\n---\n\n*This is a reference file. The actual content is located at the path shown above.*\n\n## File Preview\n\n${content.length > 500 ? content.substring(0, 500) + '\n\n... (content truncated - see original file for full content)' : content}`;
+            
+            // Transform attachment references for link files to point to original location
+            const linkFileContent = this.transformAttachmentSyntax(content, attachments, true, `../${relativePathToOriginal}`);
+            
+            const markdownLinkContent = `# Link to ${filename}\n\n**Original Location:** \`${primaryPath}/${filename}\`\n\n[Open Original File](../${relativePathToOriginal}/${filename})\n\n---\n\n*This is a reference file. The actual content is located at the path shown above.*\n\n## File Preview\n\n${linkFileContent.length > 500 ? linkFileContent.substring(0, 500) + '\n\n... (content truncated - see original file for full content)' : linkFileContent}`;
             this.zip.file(markdownLinkPath, markdownLinkContent);
         }
+    }
+
+    addAttachmentsToZip(attachments, folderPath) {
+        if (!attachments || attachments.length === 0) {
+            return;
+        }
+
+        attachments.forEach(attachmentName => {
+            if (this.attachments.has(attachmentName)) {
+                const attachmentFile = this.attachments.get(attachmentName);
+                const attachmentPath = folderPath ? `${folderPath}/${attachmentName}` : attachmentName;
+                this.zip.file(attachmentPath, attachmentFile);
+            }
+        });
     }
 
     getRelativePath(fromPath, toPath) {
@@ -285,6 +347,26 @@ class NotableOrganizer {
         const downPath = toParts.slice(commonLength).join('/');
         
         return upPath + downPath;
+    }
+
+    transformAttachmentSyntax(content, attachments, isLinkFile = false, primaryTagPath = '') {
+        // Transform @attachment/filename syntax to regular markdown links
+        let transformedContent = content;
+        
+        // Find all @attachment references in the content
+        const attachmentRegex = /@attachment\/([^)\s]+)/g;
+        
+        transformedContent = transformedContent.replace(attachmentRegex, (match, filename) => {
+            if (isLinkFile && primaryTagPath) {
+                // For link files, create relative path to the original location
+                return `${primaryTagPath}/${filename}`;
+            } else {
+                // For original files, use relative path in same directory
+                return `./${filename}`;
+            }
+        });
+        
+        return transformedContent;
     }
 
     sanitizePath(path) {
@@ -424,6 +506,7 @@ class NotableOrganizer {
 
     reset() {
         this.files = [];
+        this.attachments.clear();
         this.processedFiles = [];
         this.zip = null;
         this.currentFileIndex = 0;
