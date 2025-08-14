@@ -47,17 +47,41 @@ class NotableOrganizer {
         });
     }
 
-    handleFiles(fileList) {
-        const files = Array.from(fileList).filter(file => 
+    async handleFiles(fileList) {
+        const files = Array.from(fileList);
+        
+        // Separate ZIP files from markdown files
+        const zipFiles = files.filter(file => 
+            file.name.endsWith('.zip') || file.type === 'application/zip'
+        );
+        const markdownFiles = files.filter(file => 
             file.name.endsWith('.md') || file.type === 'text/markdown'
         );
 
-        if (files.length === 0) {
-            this.showError('No markdown files found. Please select .md files.');
+        let allMarkdownFiles = [...markdownFiles];
+
+        // Process ZIP files if any
+        if (zipFiles.length > 0) {
+            this.updateCurrentFile('Extracting ZIP files...');
+            this.showProgressSection();
+            
+            try {
+                for (const zipFile of zipFiles) {
+                    const extractedFiles = await this.extractZipFile(zipFile);
+                    allMarkdownFiles.push(...extractedFiles);
+                }
+            } catch (error) {
+                this.showError(`Error processing ZIP file: ${error.message}`);
+                return;
+            }
+        }
+
+        if (allMarkdownFiles.length === 0) {
+            this.showError('No markdown files found. Please select .md files or ZIP archives containing .md files.');
             return;
         }
 
-        this.files = files;
+        this.files = allMarkdownFiles;
         this.processedFiles = [];
         this.currentFileIndex = 0;
         this.zip = new JSZip();
@@ -100,6 +124,54 @@ class NotableOrganizer {
             console.error('Error processing files:', error);
             this.showError(`Error processing files: ${error.message}`);
         }
+    }
+
+    async extractZipFile(zipFile) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const arrayBuffer = await this.readFileAsArrayBuffer(zipFile);
+                const zip = new JSZip();
+                const zipContent = await zip.loadAsync(arrayBuffer);
+                
+                const markdownFiles = [];
+                const filePromises = [];
+                
+                // Find all markdown files in the ZIP
+                zipContent.forEach((relativePath, file) => {
+                    if (!file.dir && (relativePath.endsWith('.md') || relativePath.includes('.md'))) {
+                        filePromises.push(
+                            file.async('text').then(content => {
+                                // Create a File-like object
+                                const fileName = relativePath.split('/').pop(); // Get just the filename
+                                const blob = new Blob([content], { type: 'text/markdown' });
+                                const fileObj = new File([blob], fileName, { type: 'text/markdown' });
+                                markdownFiles.push(fileObj);
+                            })
+                        );
+                    }
+                });
+                
+                if (filePromises.length === 0) {
+                    reject(new Error('No markdown files found in ZIP archive'));
+                    return;
+                }
+                
+                await Promise.all(filePromises);
+                resolve(markdownFiles);
+                
+            } catch (error) {
+                reject(new Error(`Failed to extract ZIP file: ${error.message}`));
+            }
+        });
+    }
+
+    readFileAsArrayBuffer(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
     }
 
     readFileContent(file) {

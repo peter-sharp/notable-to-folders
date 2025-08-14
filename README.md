@@ -4,7 +4,8 @@ A web-based tool that helps you organize your [Notable](https://notable.app/) ma
 
 ## Features
 
-- **Drag & Drop Interface**: Simply drag your Notable markdown files into the browser
+- **Drag & Drop Interface**: Simply drag your Notable markdown files or ZIP archives into the browser
+- **ZIP File Support**: Upload ZIP archives containing multiple markdown files for batch processing
 - **Tag-based Organization**: Automatically organizes files into folders based on their YAML frontmatter tags
 - **Multi-tag Support**: Files with multiple tags get placed in the primary tag folder with reference links in other tag folders
 - **Cross-references**: Creates both Windows shortcuts (.url files) and markdown link files for multi-tagged notes
@@ -14,13 +15,14 @@ A web-based tool that helps you organize your [Notable](https://notable.app/) ma
 
 ## How It Works
 
-1. **Upload Files**: Drag and drop your Notable markdown files (`.md` files) or use the file picker
-2. **Processing**: The app reads the YAML frontmatter from each file to extract tags
-3. **Organization**: Files are organized into folders based on their tags:
+1. **Upload Files**: Drag and drop your Notable markdown files (`.md` files) or ZIP archives containing markdown files, or use the file picker
+2. **ZIP Extraction**: If ZIP files are uploaded, the app automatically extracts all markdown files from within them
+3. **Processing**: The app reads the YAML frontmatter from each file to extract tags
+4. **Organization**: Files are organized into folders based on their tags:
    - Primary tag determines the main folder location
    - Additional tags get reference files (shortcuts and markdown links)
    - Files without tags go into an "untagged" folder
-4. **Download**: Get your organized files as a ZIP archive
+5. **Download**: Get your organized files as a ZIP archive
 
 ## File Structure
 
@@ -42,14 +44,15 @@ organized-notes/
 ## Usage
 
 1. Open `index.html` in a web browser
-2. Drag your Notable markdown files into the drop zone
-3. Wait for processing to complete
+2. Drag your Notable markdown files or ZIP archives into the drop zone
+3. Wait for processing to complete (ZIP files will be automatically extracted)
 4. Download the organized ZIP file
 5. Extract to your desired location
 
 ## Supported File Formats
 
 - **Markdown files** (`.md`) with YAML frontmatter
+- **ZIP archives** (`.zip`) containing markdown files
 - Files must follow Notable's format with tags in frontmatter:
 
 ```yaml
