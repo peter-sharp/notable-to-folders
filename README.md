@@ -8,7 +8,7 @@ A web-based tool that helps you organize your [Notable](https://notable.app/) ma
 - **ZIP File Support**: Upload ZIP archives containing multiple markdown files for batch processing
 - **Tag-based Organization**: Automatically organizes files into folders based on their YAML frontmatter tags
 - **Multi-tag Support**: Files with multiple tags get placed in the primary tag folder with reference links in other tag folders
-- **Cross-references**: Creates both Windows shortcuts (.url files) and markdown link files for multi-tagged notes
+- **Cross-references**: Creates markdown link files for multi-tagged notes
 - **Progress Tracking**: Real-time progress display during file processing
 - **ZIP Download**: Downloads your organized files as a convenient ZIP archive
 - **Error Handling**: Graceful handling of files without tags or invalid formats
@@ -20,7 +20,7 @@ A web-based tool that helps you organize your [Notable](https://notable.app/) ma
 3. **Processing**: The app reads the YAML frontmatter from each file to extract tags
 4. **Organization**: Files are organized into folders based on their tags:
    - Primary tag determines the main folder location
-   - Additional tags get reference files (shortcuts and markdown links)
+   - Additional tags get reference files (markdown links)
    - Files without tags go into an "untagged" folder
 5. **Download**: Get your organized files as a ZIP archive
 
@@ -35,7 +35,6 @@ organized-notes/
 │   └── meeting-notes.md
 ├── personal/
 │   ├── ideas.md
-│   ├── project-notes.url (shortcut to work/project-notes.md)
 │   └── project-notes - Link.md (markdown reference)
 └── untagged/
     └── random-note.md

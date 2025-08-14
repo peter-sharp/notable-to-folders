@@ -251,21 +251,15 @@ class NotableOrganizer {
         
         this.zip.file(primaryFilePath, content);
 
-        // For additional tags, create both Windows shortcuts and markdown links
+        // For additional tags, create markdown link files
         for (let i = 1; i < tags.length; i++) {
             const tag = tags[i];
             const tagPath = this.sanitizePath(tag);
             const baseFilename = filename.replace('.md', '');
             
-            // Create Windows shortcut (.url file for web links, .lnk would need binary format)
-            // Since we can't create proper .lnk files in browser, we'll use .url files
-            const urlFilePath = `${tagPath}/${baseFilename}.url`;
-            const relativePathToOriginal = this.getRelativePath(tagPath, primaryPath);
-            const urlContent = `[InternetShortcut]\nURL=file:///${relativePathToOriginal}/${filename}\n`;
-            this.zip.file(urlFilePath, urlContent);
-            
-            // Also create a markdown file with clickable link
+            // Create a markdown file with clickable link
             const markdownLinkPath = `${tagPath}/${baseFilename} - Link.md`;
+            const relativePathToOriginal = this.getRelativePath(tagPath, primaryPath);
             const markdownLinkContent = `# Link to ${filename}\n\n**Original Location:** \`${primaryPath}/${filename}\`\n\n[Open Original File](../${relativePathToOriginal}/${filename})\n\n---\n\n*This is a reference file. The actual content is located at the path shown above.*\n\n## File Preview\n\n${content.length > 500 ? content.substring(0, 500) + '\n\n... (content truncated - see original file for full content)' : content}`;
             this.zip.file(markdownLinkPath, markdownLinkContent);
         }
